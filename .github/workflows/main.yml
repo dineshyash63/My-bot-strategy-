@@ -2,7 +2,8 @@ name: Daily Intraday Bot
 
 on:
   schedule:
-    - cron: '30 3 * * *' # Every trading day morning UTC time check panni run agum (IST 9:00 AM)
+    - cron: '30 3 * * *'  # Morning 9:00 AM IST
+    - cron: '0 10 * * *'  # Afternoon / Market hours update
   workflow_dispatch:
 
 jobs:
