@@ -1,4 +1,3 @@
-import os
 import requests
 import yfinance as yf
 import pandas as pd
@@ -19,46 +18,62 @@ def send_telegram_message(message):
     return response.json()
 
 def analyze_market():
-    # Sample watchlist stocks (Neenga unga top gainers/losers list-ah inga add pannikalam)
-    watchlist = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS"]
+    # Watchlist stocks
+    watchlist = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "SBIN.NS"]
     
-    report = "*📊 Daily Intraday Market Technical Report*\n\n"
+    report = "*📊 Intraday Technical Setup Report*\n"
     report += f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-    report += "-----------------------------------\n"
+    report += "-----------------------------------\n\n"
+    
+    active_setups = 0
     
     for symbol in watchlist:
         try:
-            # Fetching 15-minute data as per your notes
-            df = yf.download(symbol, period="5d", interval="15m")
-            if df.empty:
+            # Fetching 15-minute data
+            df = yf.download(symbol, period="3d", interval="15m", progress=False, auto_adjust=True)
+            
+            if df.empty or len(df) < 20:
                 continue
                 
-            current_close = df['Close'].iloc[-1]
-            prev_high = df['High'].iloc[-2]
-            prev_low = df['Low'].iloc[-2]
-            volume = df['Volume'].iloc[-1]
-            avg_volume = df['Volume'].rolling(window=20).mean().iloc[-1]
-            
-            # VWAP Calculation approximation
-            vwap = (df['Close'] * df['Volume']).cumsum() / df['Volume'].cumsum()
-            current_vwap = vwap.iloc[-1]
-            
-            status = "Neutral"
-            if current_close > prev_high and volume > avg_volume and current_close > current_vwap:
-                status = "🟢 Bullish Setup (Support bounce / VWAP positive crossover)"
-            elif current_close < prev_low and volume > avg_volume and current_close < current_vwap:
-                status = "🔴 Bearish Setup (Resistance breakdown / VWAP negative crossover)"
-            else:
-                status = "⏳ Consolidation / Watching zone"
+            # Flatten multi-index columns if present
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
                 
-            report += f"*{symbol}*:\n"
-            report += f"• Price: ₹{current_close:.2f}\n"
-            report += f"• Setup Status: {status}\n\n"
-        except Exception as e:
-            print(f"Error fetching {symbol}: {e}")
+            current_close = float(df['Close'].iloc[-1])
+            prev_high = float(df['High'].iloc[-2])
+            prev_low = float(df['Low'].iloc[-2])
+            current_volume = float(df['Volume'].iloc[-1])
             
+            # 20-period average volume check
+            avg_volume = float(df['Volume'].rolling(window=20).mean().iloc[-1])
+            
+            # VWAP calculation
+            typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+            vwap = (typical_price * df['Volume']).cumsum() / df['Volume'].cumsum()
+            current_vwap = float(vwap.iloc[-1])
+            
+            # Strategy checks as per your handwritten notes
+            setup_type = None
+            if current_close > prev_high and current_volume > avg_volume and current_close > current_vwap:
+                setup_type = "🟢 Bullish Setup (Resistance Breakout + High Volume + Above VWAP)"
+            elif current_close < prev_low and current_volume > avg_volume and current_close < current_vwap:
+                setup_type = "🔴 Bearish Setup (Support Breakdown + High Volume + Below VWAP)"
+            else:
+                setup_type = "⏳ Consolidating (Waiting for breakout/breakdown)"
+                
+            report += f"*{symbol}*\n"
+            report += f"• Price: ₹{current_close:.2f}\n"
+            report += f"• Status: {setup_type}\n\n"
+            active_setups += 1
+            
+        except Exception as e:
+            print(f"Error processing {symbol}: {e}")
+            
+    if active_setups == 0:
+        report += "⚠️ Market data fetching limit/error. Try running workflow manually."
+        
     send_telegram_message(report)
 
 if __name__ == "__main__":
     analyze_market()
-          
+            
